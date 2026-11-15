@@ -3,7 +3,9 @@
 Ask a SQL database questions in plain English. The agent reads the schema, writes the
 query, **proves the query only reads data**, runs it, and explains what came back.
 
-![The app answering a question](docs/app-answer.jpg)
+![The agent answering a question end to end](docs/demo.gif)
+
+*Real time, on a laptop, with an 8B model running locally — no API key.*
 
 ```console
 $ nlsql "Which country's customers spent the most?"
