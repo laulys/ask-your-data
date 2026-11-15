@@ -57,7 +57,7 @@ data, and what happens when the query is simply wrong.
 No API key needed — the default setup runs a model on your own machine.
 
 ```bash
-git clone https://github.com/laulys/nl-sql-agent.git && cd nl-sql-agent
+git clone https://github.com/laulys/ask-your-data.git && cd ask-your-data
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[ui,dev]"
 python scripts/setup_data.py          # downloads the Chinook sample database
