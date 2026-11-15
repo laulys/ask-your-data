@@ -12,7 +12,7 @@ from typing import Any
 
 import pandas as pd
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 
 __all__ = ["Database", "QueryResult"]
 
@@ -65,13 +65,33 @@ class Database:
 
     def __init__(self, url: str, *, engine: Engine | None = None) -> None:
         self.url = url
-        self.engine = engine or create_engine(url, future=True)
+        self._engine = engine
         self._schema_cache: str | None = None
 
     @property
+    def engine(self) -> Engine:
+        """The connection, created the first time it is actually needed.
+
+        Building it eagerly would import the driver package, so merely asking a
+        ``Database`` which dialect it speaks would fail unless every driver were
+        installed. Deferring it keeps the optional extras optional.
+        """
+        if self._engine is None:
+            self._engine = create_engine(self.url, future=True)
+        return self._engine
+
+    @property
     def dialect(self) -> str:
-        """The sqlglot dialect name for this connection."""
-        return _DIALECT_MAP.get(self.engine.dialect.name, self.engine.dialect.name)
+        """The sqlglot dialect name for this connection.
+
+        Read from the URL rather than the engine, so it works before a driver
+        is loaded.
+        """
+        if self._engine is not None:
+            backend = self._engine.dialect.name
+        else:
+            backend = make_url(self.url).get_backend_name()
+        return _DIALECT_MAP.get(backend, backend)
 
     def table_names(self) -> list[str]:
         return sorted(inspect(self.engine).get_table_names())

@@ -12,9 +12,24 @@ def test_dialect_is_reported_for_sqlglot(database: Database) -> None:
     assert database.dialect == "sqlite"
 
 
-def test_mysql_url_maps_to_mysql_dialect() -> None:
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("mysql+pymysql://user:pw@localhost:3306/Chinook", "mysql"),
+        ("mariadb+pymysql://user:pw@localhost:3306/Chinook", "mysql"),
+        ("postgresql+psycopg://user:pw@localhost/db", "postgres"),
+    ],
+)
+def test_dialect_is_read_from_the_url_without_loading_a_driver(url: str, expected: str) -> None:
+    """None of these drivers is installed; naming the dialect must not need them."""
+    assert Database(url).dialect == expected
+
+
+def test_engine_is_not_built_until_it_is_needed() -> None:
     database = Database("mysql+pymysql://user:pw@localhost:3306/Chinook")
+    assert database._engine is None
     assert database.dialect == "mysql"
+    assert database._engine is None
 
 
 def test_table_names_are_sorted(database: Database) -> None:

@@ -46,7 +46,7 @@ data, and what happens when the query is simply wrong.
 | If the query errors | Crashes, or loops on a parsing error | Error is fed back; the agent rewrites and retries |
 | If the result is huge | Returns everything | `LIMIT` injected and clamped |
 | Interface | `print()` | Web app + CLI, both showing the generated SQL |
-| Tests | None | 78, covering the guard, the repair loop and the CLI |
+| Tests | None | 81, covering the guard, the repair loop and the CLI, on CI across Python 3.10–3.12 |
 
 ---
 
@@ -182,7 +182,7 @@ All figures match a hand-written query against Chinook.
 ## Testing
 
 ```bash
-pytest                       # 77 passed, 1 skipped (that one needs the OpenAI SDK)
+pytest                       # 80 passed, 1 skipped (that one needs the OpenAI SDK)
 pytest --cov=nlsql           # 87% overall; agent.py 100%
 ruff check . && ruff format --check .
 ```
@@ -194,7 +194,10 @@ model, so it needs no network, no API key and no downloads. What it checks:
 - `LIMIT` injection and clamping
 - the repair loop, including that an unsafe query is refused *and* retried
 - SQL extraction from fenced blocks, bare text and `<think>` reasoning blocks
+- dialect detection for MySQL and Postgres URLs, with no driver installed
 - the CLI's exit codes
+
+CI runs the same suite on Python 3.10, 3.11 and 3.12.
 
 ---
 
