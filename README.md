@@ -1,11 +1,12 @@
-# 🗄️ Natural Language SQL Agent
+# 🗄️ Ask Your Data — consultas SQL en lenguaje natural
 
-Ask a SQL database questions in plain English. The agent reads the schema, writes the
-query, **proves the query only reads data**, runs it, and explains what came back.
+Pregúntale a una base de datos SQL en lenguaje corriente. El agente lee el esquema,
+escribe la consulta, **demuestra que esa consulta solo lee datos**, la ejecuta y
+explica lo que ha salido.
 
-![The agent answering a question end to end](docs/demo.gif)
+![El agente respondiendo una pregunta de principio a fin](docs/demo.gif)
 
-*Real time, on a laptop, with an 8B model running locally — no API key.*
+*En tiempo real, en un portátil, con un modelo de 8B corriendo en local y sin ninguna API key.*
 
 ```console
 $ nlsql "Which country's customers spent the most?"
@@ -27,111 +28,115 @@ USA      523.06
 3.9s · 1 row
 ```
 
+Las preguntas también funcionan en español: el modelo es multilingüe y el esquema de
+la base de datos va en el prompt. La respuesta sale en el idioma en que preguntes.
+
 ---
 
-## Why this exists
+## Por qué existe
 
-This started as an IBM Skills Network guided project, *Build a Natural Language SQL
-Agent*. That lab runs inside a hosted environment with a hard-coded MySQL host, free
-watsonx credentials that only work from inside IBM's own network, and a LangChain
-ReAct agent that stops at printing to the terminal.
+Esto empezó como un proyecto guiado de IBM Skills Network, *Build a Natural Language
+SQL Agent*. Ese laboratorio corre dentro de un entorno alojado, con un host de MySQL
+escrito a fuego, credenciales gratuitas de watsonx que solo funcionan desde la red de
+IBM, y un agente ReAct de LangChain que se queda en imprimir por terminal.
 
-I rebuilt it as something that **runs on anyone's laptop**, and spent the effort on
-the parts the lab skips: what happens when the model writes a query that deletes
-data, and what happens when the query is simply wrong.
+Lo reconstruí para que **funcione en el portátil de cualquiera**, y puse el esfuerzo
+justo en lo que el laboratorio se salta: qué pasa cuando el modelo escribe una
+consulta que borra datos, y qué pasa cuando la consulta simplemente está mal.
 
-| | The lab | This project |
+| | El laboratorio | Este proyecto |
 |---|---|---|
-| Credentials | `project_id="skills-network"`, no API key, IBM-only | Four interchangeable backends; works with no API key at all |
-| Database | MySQL at a hard-coded lab IP | SQLite out of the box, MySQL via Docker |
-| If the model writes `DROP TABLE` | Executed | Parsed, refused, never reaches the database |
-| If the query errors | Crashes, or loops on a parsing error | Error is fed back; the agent rewrites and retries |
-| If the result is huge | Returns everything | `LIMIT` injected and clamped |
-| Interface | `print()` | Web app + CLI, both showing the generated SQL |
-| Tests | None | 81, covering the guard, the repair loop and the CLI, on CI across Python 3.10–3.12 |
+| Credenciales | `project_id="skills-network"`, sin API key, solo dentro de IBM | Cuatro backends intercambiables; funciona sin ninguna API key |
+| Base de datos | MySQL en una IP fija del laboratorio | SQLite de serie, MySQL con Docker |
+| Si el modelo escribe `DROP TABLE` | Se ejecuta | Se analiza, se rechaza y nunca llega a la base de datos |
+| Si la consulta falla | Peta, o entra en bucle con un error de parseo | El error vuelve al modelo, que reescribe y reintenta |
+| Si el resultado es enorme | Lo devuelve entero | Se inyecta y se acota un `LIMIT` |
+| Interfaz | `print()` | App web y CLI, las dos mostrando el SQL generado |
+| Tests | Ninguno | 81, sobre el guardia, el bucle de reparación y la CLI, en CI con Python 3.10–3.12 |
 
 ---
 
-## Quickstart
+## Arranque rápido
 
-No API key needed — the default setup runs a model on your own machine.
+No hace falta ninguna API key: por defecto corre un modelo en tu propia máquina.
 
 ```bash
 git clone https://github.com/laulys/ask-your-data.git && cd ask-your-data
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[ui,dev]"
-python scripts/setup_data.py          # downloads the Chinook sample database
+python scripts/setup_data.py          # descarga la base de datos de ejemplo Chinook
 cp .env.example .env
 ```
 
-Install [Ollama](https://ollama.com) and pull a model (about 5 GB):
+Instala [Ollama](https://ollama.com) y descarga un modelo (unos 5 GB):
 
 ```bash
 ollama pull qwen3:8b
 ```
 
-Then ask it something:
+Y ya puedes preguntarle:
 
 ```bash
-nlsql "How many albums are there in the database?"
+nlsql "¿Cuántos álbumes hay en la base de datos?"
 ```
 
-Or open the web app:
+O abrir la app web:
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-### Using a hosted model instead
+### Usar un modelo alojado
 
-Set two lines in `.env` and nothing else changes:
+Cambias dos líneas en `.env` y no hace falta tocar nada más:
 
 ```bash
-NLSQL_PROVIDER=openai       # or anthropic, or watsonx
+NLSQL_PROVIDER=openai       # o anthropic, o watsonx
 OPENAI_API_KEY=sk-...
 ```
 
 ```bash
-pip install -e ".[openai]"   # or .[anthropic] / .[watsonx]
+pip install -e ".[openai]"   # o .[anthropic] / .[watsonx]
 ```
 
 ---
 
-## How it works
+## Cómo funciona
 
 ```mermaid
 flowchart LR
-    Q["Question<br/>in English"] --> P["Prompt<br/>+ live schema"]
-    P --> M(["LLM"])
-    M -->|SQL| G{"Safety guard<br/>parse the AST"}
-    G -->|"write or<br/>multi-statement"| X["Refused<br/>never executed"]
-    G -->|"single SELECT<br/>+ LIMIT"| DB[("Database")]
-    DB -->|error| R["Repair:<br/>error back to the model"]
+    Q["Pregunta en<br/>lenguaje natural"] --> P["Prompt<br/>+ esquema en vivo"]
+    P --> M(["Modelo"])
+    M -->|SQL| G{"Guardia:<br/>analiza el AST"}
+    G -->|"escritura o<br/>varias sentencias"| X["Rechazada<br/>nunca se ejecuta"]
+    G -->|"un solo SELECT<br/>+ LIMIT"| DB[("Base de datos")]
+    DB -->|error| R["Reparación:<br/>el error vuelve al modelo"]
     R --> M
-    DB -->|rows| A(["LLM explains<br/>the rows"])
-    A --> OUT["Answer + SQL<br/>+ table + chart"]
+    DB -->|filas| A(["El modelo explica<br/>las filas"])
+    A --> OUT["Respuesta + SQL<br/>+ tabla + gráfico"]
 ```
 
-Five small pieces, each testable on its own:
+Cinco piezas pequeñas, cada una comprobable por separado:
 
-| Module | Job |
+| Módulo | Para qué sirve |
 |---|---|
-| [`database.py`](src/nlsql/database.py) | Connects, and turns the live schema into compact DDL for the prompt |
-| [`safety.py`](src/nlsql/safety.py) | Parses generated SQL and refuses anything that is not one read-only statement |
-| [`llm.py`](src/nlsql/llm.py) | One interface, four backends |
-| [`agent.py`](src/nlsql/agent.py) | The loop: generate → guard → run → repair → explain |
-| [`prompts.py`](src/nlsql/prompts.py) | Every prompt, in one readable file |
+| [`database.py`](src/nlsql/database.py) | Conecta y convierte el esquema real en DDL compacto para el prompt |
+| [`safety.py`](src/nlsql/safety.py) | Analiza el SQL generado y rechaza todo lo que no sea una única sentencia de lectura |
+| [`llm.py`](src/nlsql/llm.py) | Una sola interfaz, cuatro backends |
+| [`agent.py`](src/nlsql/agent.py) | El bucle: generar → vigilar → ejecutar → reparar → explicar |
+| [`prompts.py`](src/nlsql/prompts.py) | Todos los prompts, en un único archivo legible |
 
-### The safety guard
+### El guardia de seguridad
 
-A text-to-SQL tool hands a language model a database connection. Asking the model
-nicely not to delete anything is not a control. So generated SQL is parsed into a
-syntax tree with [`sqlglot`](https://github.com/tobymao/sqlglot) and rejected unless
-the tree is a single read-only statement:
+Una herramienta de texto a SQL le entrega a un modelo de lenguaje una conexión a
+la base de datos. Pedirle por favor que no borre nada no es un control. Así que el
+SQL generado se analiza hasta convertirlo en un árbol sintáctico con
+[`sqlglot`](https://github.com/tobymao/sqlglot) y se rechaza salvo que ese árbol sea
+una única sentencia de solo lectura:
 
 ```python
 >>> enforce_read_only("SELECT * FROM Album", "sqlite", max_rows=200)
-'SELECT * FROM Album LIMIT 200'              # limit injected
+'SELECT * FROM Album LIMIT 200'              # límite inyectado
 
 >>> enforce_read_only("SELECT 1; DROP TABLE Album", "sqlite")
 UnsafeSQLError: Expected a single statement, got 2.
@@ -140,72 +145,75 @@ UnsafeSQLError: Expected a single statement, got 2.
 UnsafeSQLError: Only read-only queries are allowed, got PRAGMA.
 ```
 
-It blocks writes, DDL, chained statements, `SELECT ... INTO`, and the commands
-`PRAGMA`/`ATTACH` that reach outside the current query — while still allowing CTEs,
-`UNION`, subqueries and joins. An over-large `LIMIT` is clamped rather than trusted.
+Bloquea escrituras, DDL, sentencias encadenadas, `SELECT ... INTO` y los comandos
+`PRAGMA` y `ATTACH`, que se salen de la consulta actual, mientras sigue permitiendo
+CTEs, `UNION`, subconsultas y joins. Un `LIMIT` demasiado grande se recorta en vez de
+darlo por bueno.
 
-This is one layer, not the only one. The connection is never committed, and in
-production you would also connect as a user holding nothing but `SELECT`.
+Es una capa, no la única. La conexión nunca hace commit y, en producción, además
+conectarías con un usuario que no tenga más permiso que `SELECT`.
 
-### Self-repair
+### Reparación automática
 
-The model's first query is often wrong — a column that does not exist, a join in the
-wrong direction. Rather than failing, the agent hands the database's own error message
-back to the model and asks for a correction, up to `NLSQL_MAX_REPAIRS` times. The web
-app shows every failed attempt in an expander, because hiding them would make the demo
-look smoother and teach you less.
+La primera consulta del modelo falla a menudo: una columna que no existe, un join al
+revés. En vez de rendirse, el agente le devuelve al modelo el mensaje de error de la
+propia base de datos y le pide una corrección, hasta `NLSQL_MAX_REPAIRS` veces. La app
+web enseña cada intento fallido en un desplegable, porque esconderlos haría la demo
+más lucida y te enseñaría menos.
 
-### Questions that need no query
+### Preguntas que no necesitan consulta
 
-"Describe the PlaylistTrack table" is a question about the schema, not the data. The
-model answers it directly from the schema already in its prompt instead of inventing a
-query to run. The same path handles "delete everything", which gets a flat refusal.
+«Describe the PlaylistTrack table» es una pregunta sobre el esquema, no sobre los
+datos. El modelo la responde directamente con el esquema que ya tiene en el prompt, en
+lugar de inventarse una consulta que ejecutar. Por ese mismo camino pasa «bórralo
+todo», que recibe una negativa seca.
 
 ---
 
-## Results
+## Resultados
 
-![Chart view](docs/app-chart.jpg)
+![Vista de gráfico](docs/app-chart.jpg)
 
-Measured on an M-series Mac with `qwen3:8b` running locally — no API, no network:
+Medido en un Mac con chip de la serie M y `qwen3:8b` en local, sin API y sin red:
 
-| Question | Time | Answer |
+| Pregunta | Tiempo | Respuesta |
 |---|---|---|
-| How many albums are there? | 7.7s | 347 |
-| Which country's customers spent the most? | 3.9s | USA, $523.06 |
-| Top 5 best selling artists by revenue? | 10.6s | Iron Maiden, $138.60 |
-| Describe the PlaylistTrack table | 4.3s | *answered from the schema, no query* |
-| Delete every row in the Album table | 3.5s | *refused, read-only* |
+| ¿Cuántos álbumes hay? | 7,7 s | 347 |
+| ¿De qué país son los clientes que más gastaron? | 3,9 s | EE. UU., 523,06 $ |
+| Los 5 artistas que más venden por ingresos | 10,6 s | Iron Maiden, 138,60 $ |
+| Describe la tabla PlaylistTrack | 4,3 s | *respondida desde el esquema, sin consulta* |
+| Borra todas las filas de la tabla Album | 3,5 s | *rechazada, solo lectura* |
 
-All figures match a hand-written query against Chinook.
+Todas las cifras coinciden con una consulta escrita a mano contra Chinook.
 
 ---
 
-## Testing
+## Tests
 
 ```bash
-pytest                       # 80 passed, 1 skipped (that one needs the OpenAI SDK)
-pytest --cov=nlsql           # 87% overall; agent.py 100%
+pytest                       # 80 pasan, 1 se salta (esa necesita el SDK de OpenAI)
+pytest --cov=nlsql           # 87 % de cobertura; agent.py al 100 %
 ruff check . && ruff format --check .
 ```
 
-The suite runs against a small purpose-built SQLite database and a scripted fake
-model, so it needs no network, no API key and no downloads. What it checks:
+La suite corre contra una base de datos SQLite diminuta hecha a propósito y un modelo
+falso con respuestas guionizadas, así que no necesita red, ni API key, ni descargas.
+Lo que comprueba:
 
-- every write, DDL and injection shape the guard must block
-- `LIMIT` injection and clamping
-- the repair loop, including that an unsafe query is refused *and* retried
-- SQL extraction from fenced blocks, bare text and `<think>` reasoning blocks
-- dialect detection for MySQL and Postgres URLs, with no driver installed
-- the CLI's exit codes
+- todas las formas de escritura, DDL e inyección que el guardia debe bloquear
+- la inyección y el recorte del `LIMIT`
+- el bucle de reparación, incluido que una consulta insegura se rechace *y* se reintente
+- la extracción de SQL de bloques con comillas, texto pelado y bloques de razonamiento `<think>`
+- la detección de dialecto para URLs de MySQL y Postgres, sin ningún driver instalado
+- los códigos de salida de la CLI
 
-CI runs the same suite on Python 3.10, 3.11 and 3.12.
+El CI pasa la misma suite en Python 3.10, 3.11 y 3.12.
 
 ---
 
-## Running against MySQL
+## Usarlo contra MySQL
 
-To use MySQL, the way the original lab does:
+Para usar MySQL, como hace el laboratorio original:
 
 ```bash
 python scripts/setup_data.py --mysql
@@ -216,54 +224,56 @@ docker compose up -d
 NLSQL_DATABASE_URL=mysql+pymysql://root:chinook@127.0.0.1:3306/Chinook
 ```
 
-The agent detects the dialect from the URL and writes MySQL rather than SQLite.
+El agente detecta el dialecto a partir de la URL y escribe MySQL en lugar de SQLite.
 
-> Heads up: the SQLite path is the one I have run end to end. The MySQL path is
-> covered by unit tests for URL and dialect handling, but I have not run the
-> container myself — Docker is not installed on the machine I built this on.
+> Aviso: el camino de SQLite es el que he ejecutado de principio a fin. El de MySQL
+> está cubierto por tests unitarios de URL y de dialecto, pero no he levantado el
+> contenedor yo misma: la máquina donde construí esto no tiene Docker instalado.
 
 ---
 
-## Configuration
+## Configuración
 
-Every setting has a working default; see [`.env.example`](.env.example).
+Todo tiene un valor por defecto que funciona; ver [`.env.example`](.env.example).
 
-| Variable | Default | Meaning |
+| Variable | Por defecto | Qué hace |
 |---|---|---|
-| `NLSQL_PROVIDER` | `ollama` | `ollama`, `openai`, `anthropic` or `watsonx` |
-| `NLSQL_DATABASE_URL` | `sqlite:///data/chinook.db` | Any SQLAlchemy URL |
-| `NLSQL_MAX_ROWS` | `200` | Row ceiling applied to every generated query |
-| `NLSQL_MAX_REPAIRS` | `2` | How many times the agent may rewrite a failing query |
+| `NLSQL_PROVIDER` | `ollama` | `ollama`, `openai`, `anthropic` o `watsonx` |
+| `NLSQL_DATABASE_URL` | `sqlite:///data/chinook.db` | Cualquier URL de SQLAlchemy |
+| `NLSQL_MAX_ROWS` | `200` | Techo de filas que se aplica a toda consulta generada |
+| `NLSQL_MAX_REPAIRS` | `2` | Cuántas veces puede el agente reescribir una consulta que falla |
 
 ---
 
-## The data
+## Los datos
 
-[Chinook](https://github.com/lerocha/chinook-database) — a digital music store:
-11 tables, ~15,000 rows, real foreign keys. Track metadata comes from a real iTunes
-library; customers and invoices are generated. It is a good text-to-SQL benchmark
-because most interesting questions need a three- or four-table join.
-
----
-
-## What I would do next
-
-- **Evaluation harness.** Right now "it works" means I checked the answers by hand.
-  A set of question/expected-SQL pairs scored automatically would catch regressions
-  when a prompt changes.
-- **Schema retrieval.** The whole schema goes in the prompt. That is fine for 11
-  tables and breaks somewhere past a few hundred; the fix is retrieving only the
-  relevant tables.
-- **Query cost limits.** A `LIMIT` caps rows returned, not work done. A cartesian
-  join over large tables would still hurt, so a statement timeout belongs here.
+[Chinook](https://github.com/lerocha/chinook-database): una tienda de música digital
+con 11 tablas, unas 15.000 filas y claves foráneas de verdad. Los metadatos de las
+pistas vienen de una biblioteca real de iTunes; los clientes y las facturas están
+generados. Es un buen banco de pruebas para texto a SQL porque casi cualquier pregunta
+interesante exige un join de tres o cuatro tablas.
 
 ---
 
-## Credits
+## Qué haría a continuación
 
-Built on the IBM Skills Network guided project *Build a Natural Language SQL Agent*
-by Ricky Shi. The idea and the choice of dataset are from the course; the
-architecture, the safety layer, the repair loop, the provider abstraction, the
-interfaces and the tests are my own work.
+- **Un banco de evaluación.** Ahora mismo «funciona» significa que comprobé las
+  respuestas a mano. Un conjunto de pares pregunta/SQL esperado, puntuado
+  automáticamente, detectaría regresiones al cambiar un prompt.
+- **Recuperación del esquema.** El esquema entero va en el prompt. Eso vale para 11
+  tablas y se rompe en algún punto por encima de unos cientos; la solución es recuperar
+  solo las tablas relevantes.
+- **Límites de coste por consulta.** Un `LIMIT` acota las filas devueltas, no el
+  trabajo hecho. Un producto cartesiano sobre tablas grandes seguiría doliendo, así que
+  aquí hace falta un tiempo máximo de ejecución.
 
-MIT licensed. Chinook is MIT licensed, by Luis Rocha.
+---
+
+## Créditos
+
+Construido sobre el proyecto guiado de IBM Skills Network *Build a Natural Language SQL
+Agent*, de Ricky Shi. La idea y la elección del conjunto de datos vienen del curso; la
+arquitectura, la capa de seguridad, el bucle de reparación, la abstracción de
+proveedores, las interfaces y los tests son trabajo mío.
+
+Licencia MIT. Chinook también es MIT, de Luis Rocha.
