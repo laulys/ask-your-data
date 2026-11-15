@@ -1,0 +1,27 @@
+# Environment
+.env
+.venv/
+venv/
+my_env/
+
+# Data (downloaded by `make setup`)
+data/*.db
+data/*.sqlite
+data/*.sql
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / editors / tooling
+.DS_Store
+.idea/
+.vscode/
+.claude/

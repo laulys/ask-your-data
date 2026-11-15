@@ -1,0 +1,34 @@
+# Optional: run the same agent against MySQL instead of SQLite, the way the
+# original IBM lab does.
+#
+#   python scripts/setup_data.py --mysql    # fetch the dump into ./data
+#   docker compose up -d                    # start MySQL and load it
+#
+# Then point the agent at it in .env:
+#   NLSQL_DATABASE_URL=mysql+pymysql://root:chinook@127.0.0.1:3306/Chinook
+#
+# Credentials are deliberately trivial: this is a disposable container holding
+# a public sample dataset, published here so the demo is reproducible. Never
+# reuse this pattern for anything real.
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: nlsql-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: chinook
+      MYSQL_DATABASE: Chinook
+    ports:
+      - "3306:3306"
+    volumes:
+      # Anything in this directory is executed once, on first start.
+      - ./data/chinook-mysql.sql:/docker-entrypoint-initdb.d/01-chinook.sql:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pchinook"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:
