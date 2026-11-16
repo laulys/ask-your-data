@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ask-your-data"
 version = "0.1.0"
-description = "Ask a SQL database questions in plain English. The agent writes the SQL, checks it is read-only, runs it and explains the answer."
+description = "Pregúntale a una base de datos SQL en lenguaje corriente. El agente escribe la consulta, comprueba que solo lee datos, la ejecuta y explica el resultado."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
